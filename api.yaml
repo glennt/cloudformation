@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+    stage:
+        Type: String
+    region:
+        Type: String
+Resources:
+  MyTestLambda1:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "my-test-lambda-${stage}"
+      Handler: index.handler
+      Runtime: nodejs6.10
+      CodeUri: s3://gt-lambda-code/2ef27c4f01e9c0de33bb206b7278bf1d
+  MyTestLambda2:
+      Type: AWS::Serverless::Function
+      Properties:
+        FunctionName: !Sub "my-test-lambda-2-${stage}"
+        Handler: index.handler
+        Runtime: nodejs6.10
+        CodeUri: s3://gt-lambda-code/2ef27c4f01e9c0de33bb206b7278bf1d
+  MyTestLambda1ApiAgwLambdaPermission:
+      Type: "AWS::Lambda::Permission"
+      DependsOn:
+      - MyTestLambda1
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !Ref MyTestLambda1
+        Principal: apigateway.amazonaws.com
+  MyTestLambda2AgwLambdaPermission2:
+      Type: "AWS::Lambda::Permission"
+      DependsOn:
+      - MyTestLambda2
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName: !Ref MyTestLambda2
+        Principal: apigateway.amazonaws.com
+  ApiGatewayApi:
+    DependsOn:
+      - MyTestLambda1
+      - MyTestLambda2
+    Type: AWS::Serverless::Api
+    Properties:
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          version: "2016-12-20T18:27:47Z"
+          title: !Sub "my-test-api-${stage}"
+        basePath: "/my-api"
+        schemes:
+        - "https"
+        paths:
+          /testGet:
+            get:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Content-Type:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Content-Type: "'application/json'"
+                uri:
+                  Fn::Join:
+                    - ''
+                    - - !Sub "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/"
+                      - !GetAtt MyTestLambda1.Arn
+                      - "/invocations"
+                passthroughBehavior: "when_no_templates"
+                httpMethod: "POST" #BUG, MUST ALWAYS BE POST
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+          /testGetOther:
+            get:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Content-Type:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Content-Type: "'application/json'"
+                uri:
+                  Fn::Join:
+                    - ''
+                    - - !Sub "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/"
+                      - !GetAtt MyTestLambda1.Arn
+                      - "/invocations"
+                passthroughBehavior: "when_no_templates"
+                httpMethod: "POST" #BUG, MUST ALWAYS BE POST
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+          /testGet2:
+              get:
+                consumes:
+                - "application/json"
+                produces:
+                - "application/json"
+                responses:
+                  "200":
+                    description: "200 response"
+                    headers:
+                      Content-Type:
+                        type: "string"
+                x-amazon-apigateway-integration:
+                  responses:
+                    default:
+                      statusCode: "200"
+                      responseParameters:
+                        method.response.header.Content-Type: "'application/json'"
+                  requestTemplates:
+                    application/json: "{\n    \"body\" : \"$input.params('Body')\",\n    \"\
+                      from2Number\" : \"$input.params('From')\",\n    \"image\" : \"$input.params('MediaUrl0')\"\
+                      ,\n    \"numMedia\" : \"$input.params('NumMedia')\"\n}"
+                  # NOTE: Replace <<region>> and <<account>> fields
+                  uri:
+                    Fn::Join:
+                      - ''
+                      - - !Sub "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/"
+                        - !GetAtt MyTestLambda1.Arn
+                        - "/invocations"
+                  passthroughBehavior: "when_no_templates"
+                  httpMethod: "POST" #BUG, MUST ALWAYS BE POST
+                  contentHandling: "CONVERT_TO_TEXT"
+                  type: "aws_proxy"
+      StageName: !Sub "${stage}"
+      Variables:
+        stage: !Sub "${stage}"
